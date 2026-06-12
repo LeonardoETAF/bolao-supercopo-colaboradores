@@ -106,7 +106,7 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
             GROUP BY u.id, u.nome
             HAVING COALESCE(SUM(p.pontuacao), 0) > 0
             ORDER BY total_pontos DESC,
-                     COUNT(*) FILTER (WHERE p.pontuacao = 10) DESC
+                     MAX(p.criado_em) DESC NULLS LAST
             LIMIT 3
             "#,
         )
@@ -124,7 +124,6 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
             .collect();
 
         let (redes, whatsapp_url) = redes_e_whatsapp(&state).await;
-        let cfg = crate::landing::carregar(&state.db).await.unwrap_or_default();
         return render(IndexTemplate {
             encerrado: true,
             podio,
@@ -132,8 +131,6 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
             outros: Vec::new(),
             redes,
             whatsapp_url,
-            desconto_participacao: cfg.cupom_participacao_desconto,
-            desconto_acerto: cfg.cupom_acerto_desconto,
         });
     }
 
@@ -154,7 +151,6 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
     };
 
     let (redes, whatsapp_url) = redes_e_whatsapp(&state).await;
-    let cfg = crate::landing::carregar(&state.db).await.unwrap_or_default();
     render(IndexTemplate {
         encerrado: false,
         podio: Vec::new(),
@@ -162,8 +158,6 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
         outros: views,
         redes,
         whatsapp_url,
-        desconto_participacao: cfg.cupom_participacao_desconto,
-        desconto_acerto: cfg.cupom_acerto_desconto,
     })
 }
 

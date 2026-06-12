@@ -12,7 +12,7 @@
   // Mensagem padrão de convite usada nos dois canais.
   var MENSAGEM_CONVITE =
     '⚽ Participe do Bolão Super Copo da Copa! ' +
-    'Dê seu palpite, concorra a prêmios e ganhe cupom de desconto. 🏆';
+    'Dê seu palpite, suba no ranking e concorra a prêmios. 🏆';
 
   /**
    * Abre o WhatsApp (web ou app) com a mensagem de convite + URL atual.

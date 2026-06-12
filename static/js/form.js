@@ -6,7 +6,6 @@
  *  - Máscaras de CPF e telefone em tempo real.
  *  - Validação client-side (nome, telefone, CPF com dígitos verificadores).
  *  - Envio via fetch para /api/palpite e exibição do modal de sucesso.
- *  - Funções globais: copiarCupom().
  */
 (function () {
   'use strict';
@@ -111,14 +110,6 @@
     return true;
   }
 
-  /**
-   * Validação básica de e-mail (formato local@dominio.tld, sem espaços).
-   */
-  function emailValido(valor) {
-    var e = (valor || '').trim();
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-  }
-
   /* ----------------------------------------------------------------
    * Helpers de erro
    * ---------------------------------------------------------------- */
@@ -133,7 +124,7 @@
   function limparErros() {
     definirErro('erro-nome', '');
     definirErro('erro-telefone', '');
-    definirErro('erro-email', '');
+    definirErro('erro-cpf', '');
     var geral = document.getElementById('erro-geral');
     if (geral) {
       geral.textContent = '';
@@ -163,16 +154,17 @@
       return;
     }
 
-    var inputEmail = form.querySelector('[name="email"]');
+    var inputCpf = form.querySelector('[name="cpf"]');
     var inputTelefone = form.querySelector('[name="telefone"]');
     var inputNome = form.querySelector('[name="nome"]');
 
     /* ---- Máscaras em tempo real ---- */
 
-    if (inputEmail) {
-      inputEmail.addEventListener('input', function () {
-        if (emailValido(inputEmail.value)) {
-          definirErro('erro-email', '');
+    if (inputCpf) {
+      inputCpf.addEventListener('input', function () {
+        inputCpf.value = formatarCpf(inputCpf.value);
+        if (cpfValido(inputCpf.value)) {
+          definirErro('erro-cpf', '');
         }
       });
     }
@@ -215,10 +207,10 @@
         ok = false;
       }
 
-      // E-mail: formato válido.
-      var emailVal = inputEmail ? inputEmail.value : '';
-      if (!emailValido(emailVal)) {
-        definirErro('erro-email', 'E-mail inválido.');
+      // CPF: dígitos verificadores válidos.
+      var cpfVal = inputCpf ? inputCpf.value : '';
+      if (!cpfValido(cpfVal)) {
+        definirErro('erro-cpf', 'CPF inválido.');
         ok = false;
       }
 
@@ -252,7 +244,7 @@
       var payload = {
         nome: inputNome ? inputNome.value.trim() : '',
         telefone: inputTelefone ? somenteDigitos(inputTelefone.value) : '',
-        email: inputEmail ? inputEmail.value.trim() : '',
+        cpf: inputCpf ? somenteDigitos(inputCpf.value) : '',
         jogo_id: jogoIdEl ? jogoIdEl.value : '',
         gols_time_a: golsAEl ? Number(golsAEl.value) : 0,
         gols_time_b: golsBEl ? Number(golsBEl.value) : 0
@@ -287,12 +279,7 @@
         })
         .then(function (resultado) {
           if (resultado.ok && resultado.dados && resultado.dados.sucesso) {
-            // Sucesso: mostra o cupom no modal.
-            var cupom = resultado.dados.cupom || {};
-            var cupomEl = document.getElementById('cupom-codigo');
-            if (cupomEl) {
-              cupomEl.textContent = cupom.codigo || '';
-            }
+            // Sucesso: confirma o palpite no modal.
             fecharModalPalpite();
             abrirModalSucesso();
             form.reset();
@@ -315,37 +302,69 @@
   });
 
   /* ----------------------------------------------------------------
-   * Modal de sucesso
+   * Modais (palpite e sucesso) + botão "Voltar"
+   *
+   * Ao abrir um modal, empilhamos um estado no histórico. O botão voltar do
+   * navegador/celular dispara `popstate`, que apenas FECHA o modal — sem sair
+   * da página. Fechar pelo botão/clique fora também sincroniza o histórico
+   * (consumindo a entrada que adicionamos).
    * ---------------------------------------------------------------- */
 
-  function abrirModalSucesso() {
-    var modal = document.getElementById('modal-sucesso');
-    if (modal) {
-      modal.removeAttribute('hidden');
+  var IDS_MODAIS = ['modal-palpite', 'modal-sucesso'];
+  var entradaHistorico = false; // há uma entrada nossa no histórico?
+  var ignorarPopstate = false;  // evita fechar duas vezes ao sincronizar
+
+  function modaisAbertos() {
+    return IDS_MODAIS.filter(function (id) {
+      var m = document.getElementById(id);
+      return m && !m.hasAttribute('hidden');
+    });
+  }
+
+  function ocultarModal(id) {
+    var m = document.getElementById(id);
+    if (m) m.setAttribute('hidden', '');
+  }
+
+  function mostrarModal(id) {
+    var m = document.getElementById(id);
+    if (!m) return;
+    m.removeAttribute('hidden');
+    // Garante UMA entrada de histórico enquanto algum modal estiver aberto.
+    if (!entradaHistorico) {
+      entradaHistorico = true;
+      try { history.pushState({ scModal: true }, ''); } catch (e) { /* ignore */ }
     }
   }
 
-  function fecharModalSucesso() {
-    var modal = document.getElementById('modal-sucesso');
-    if (modal) {
-      modal.setAttribute('hidden', '');
+  // Fechamento por ação do usuário: oculta e desfaz a entrada do histórico.
+  function fecharModaisUsuario() {
+    modaisAbertos().forEach(ocultarModal);
+    if (entradaHistorico) {
+      entradaHistorico = false;
+      ignorarPopstate = true;
+      try { history.back(); } catch (e) { ignorarPopstate = false; }
     }
   }
+
+  // Botão "Voltar": fecha o modal aberto em vez de navegar para fora.
+  window.addEventListener('popstate', function () {
+    if (ignorarPopstate) { ignorarPopstate = false; return; }
+    var abertos = modaisAbertos();
+    if (abertos.length) {
+      entradaHistorico = false; // a entrada foi consumida pelo "voltar"
+      abertos.forEach(ocultarModal);
+    }
+  });
+
+  /* ---- Modal de sucesso ---- */
+  function abrirModalSucesso() { mostrarModal('modal-sucesso'); }
+  function fecharModalSucesso() { fecharModaisUsuario(); }
 
   /* ---- Modal do formulário de palpite ---- */
-  function abrirModalPalpite() {
-    var modal = document.getElementById('modal-palpite');
-    if (modal) {
-      modal.removeAttribute('hidden');
-    }
-  }
-
-  function fecharModalPalpite() {
-    var modal = document.getElementById('modal-palpite');
-    if (modal) {
-      modal.setAttribute('hidden', '');
-    }
-  }
+  function abrirModalPalpite() { mostrarModal('modal-palpite'); }
+  // Fechamento "interno" (ao abrir o sucesso): só oculta, sem mexer no histórico.
+  function fecharModalPalpite() { ocultarModal('modal-palpite'); }
   window.abrirModalPalpite = abrirModalPalpite;
   window.fecharModalPalpite = fecharModalPalpite;
 
@@ -383,7 +402,7 @@
           evento.target.hasAttribute('data-fechar-palpite') ||
           (card && !card.contains(evento.target))
         ) {
-          fecharModalPalpite();
+          fecharModaisUsuario();
         }
       });
     }
@@ -399,67 +418,11 @@
     for (var i = 0; i < botoesFechar.length; i++) {
       botoesFechar[i].addEventListener('click', function (evento) {
         evento.preventDefault();
-        fecharModalSucesso();
+        fecharModaisUsuario();
       });
     }
   });
 
   // Expõe a função de fechar globalmente (para uso em onclick, se houver).
   window.fecharModalSucesso = fecharModalSucesso;
-
-  /* ----------------------------------------------------------------
-   * Cópia do cupom
-   * ---------------------------------------------------------------- */
-
-  /**
-   * Copia o código do cupom (#cupom-codigo) para a área de transferência.
-   * Função global chamada via onclick no HTML.
-   */
-  function copiarCupom() {
-    var cupomEl = document.getElementById('cupom-codigo');
-    if (!cupomEl) {
-      return;
-    }
-    var codigo = cupomEl.textContent.trim();
-    if (!codigo) {
-      return;
-    }
-
-    var botao = typeof event !== 'undefined' && event ? event.target : null;
-    function feedback() {
-      if (botao) {
-        var original = botao.textContent;
-        botao.textContent = 'Copiado!';
-        setTimeout(function () { botao.textContent = original; }, 2000);
-      }
-    }
-    function execCopy() {
-      try {
-        var area = document.createElement('textarea');
-        area.value = codigo;
-        area.setAttribute('readonly', '');
-        area.style.position = 'fixed';
-        area.style.left = '-9999px';
-        area.style.opacity = '0';
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand('copy');
-        document.body.removeChild(area);
-      } catch (e) { /* silencioso */ }
-    }
-
-    // Cópia silenciosa: sem alerts/diálogos do navegador.
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(codigo).then(feedback, function () {
-        execCopy();
-        feedback();
-      });
-    } else {
-      execCopy();
-      feedback();
-    }
-  }
-
-  // Expõe globalmente.
-  window.copiarCupom = copiarCupom;
 })();

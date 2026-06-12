@@ -1,4 +1,4 @@
-// Painel administrativo — login JWT + gestão de jogos, resultados, métricas e cupons.
+// Painel administrativo — login JWT + gestão de jogos, resultados, métricas e participantes.
 (() => {
   "use strict";
 
@@ -88,15 +88,15 @@
 
   // ---- Carregamentos ----
   async function carregarTudo() {
-    // Viewer só enxerga Métricas e Leads.
+    // Viewer só enxerga Métricas e Participantes.
     if (userRole === "viewer") {
-      await Promise.all([carregarMetricas(), carregarCupons()]);
+      await Promise.all([carregarMetricas(), carregarParticipantes()]);
       return;
     }
     await Promise.all([
       carregarMetricas(),
       carregarJogos(),
-      carregarCupons(),
+      carregarParticipantes(),
       carregarLanding(),
       carregarBandeiras(),
     ]);
@@ -244,9 +244,6 @@
       if (el) el.value = valor ?? "";
     };
     // Confronto (times/data/horário) e placar vêm do jogo atual, não do config.
-    set("cupom_participacao_desconto", cfg.cupom_participacao_desconto);
-    set("cupom_acerto_desconto", cfg.cupom_acerto_desconto);
-
     REDES.forEach((rede) => {
       const r = cfg[rede] || { ativo: false, url: "" };
       const at = document.querySelector(`[data-rede-ativo="${rede}"]`);
@@ -282,7 +279,7 @@
     }
   }
 
-  // Divulga o resultado do jogo atual: encerra, apura o ranking e gera cupons 30%.
+  // Divulga o resultado do jogo atual: encerra o jogo e apura o ranking.
   async function divulgarResultado() {
     const box = $("#landing-config");
     const btn = $("#btn-divulgar-resultado");
@@ -305,7 +302,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.erro || "Erro ao divulgar resultado");
       if (st)
-        st.textContent = `Resultado divulgado! ${data.processados} palpites apurados, ${data.cupons_30} cupons gerados.`;
+        st.textContent = `Resultado divulgado! ${data.processados} palpites apurados.`;
       await carregarJogos();
       await carregarMetricas();
       atualizarResultado();
@@ -332,8 +329,6 @@
       horario: val("horario"),
       placar_time1: Number(val("placar_time1")) || 0,
       placar_time2: Number(val("placar_time2")) || 0,
-      cupom_participacao_desconto: Number(val("cupom_participacao_desconto")) || 0,
-      cupom_acerto_desconto: Number(val("cupom_acerto_desconto")) || 0,
     };
     REDES.forEach((rede) => {
       const ativoEl = document.querySelector(`[data-rede-ativo="${rede}"]`);
@@ -386,8 +381,6 @@
     alvo.innerHTML =
       card(m.total_participantes, "Participantes") +
       card(m.total_palpites, "Palpites") +
-      card(m.cupons_gerados, "Cupons gerados") +
-      card(m.cupons_utilizados, "Cupons usados") +
       card((m.taxa_acerto ?? 0) + "%", "Taxa de acerto");
   }
 
@@ -517,82 +510,70 @@
     });
   }
 
-  let cuponsCache = [];
-  let filtroCupons = "";
-  let buscaCupons = "";
+  let participantesCache = [];
+  let buscaParticipantes = "";
 
-  async function carregarCupons() {
-    const alvo = $("#lista-cupons");
-    if (!alvo) return;
-    const url = filtroCupons ? `/admin/cupons?filtro=${filtroCupons}` : "/admin/cupons";
-    const res = await fetch(url, { headers: authHeaders() });
-    if (res.status === 401) return sair();
-    cuponsCache = await res.json();
-    renderizarCupons();
+  function soDigitos(s) {
+    return String(s || "").replace(/\D/g, "");
   }
 
-  function renderizarCupons() {
-    const alvo = $("#lista-cupons");
+  function formatarCpf(s) {
+    const d = soDigitos(s).slice(0, 11);
+    if (d.length !== 11) return s;
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  }
+
+  function formatarTelefone(s) {
+    const d = soDigitos(s);
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return s;
+  }
+
+  async function carregarParticipantes() {
+    const alvo = $("#lista-participantes");
     if (!alvo) return;
-    const termo = buscaCupons.trim().toLowerCase();
+    const res = await fetch("/admin/participantes", { headers: authHeaders() });
+    if (res.status === 401) return sair();
+    participantesCache = await res.json();
+    renderizarParticipantes();
+  }
+
+  function renderizarParticipantes() {
+    const alvo = $("#lista-participantes");
+    if (!alvo) return;
+    const termo = buscaParticipantes.trim().toLowerCase();
     const lista = termo
-      ? cuponsCache.filter(
-          (c) =>
-            c.codigo.toLowerCase().includes(termo) ||
-            String(c.tipo).toLowerCase().includes(termo)
+      ? participantesCache.filter(
+          (p) =>
+            p.nome.toLowerCase().includes(termo) ||
+            soDigitos(p.cpf).includes(soDigitos(termo)) ||
+            soDigitos(p.telefone).includes(soDigitos(termo))
         )
-      : cuponsCache;
+      : participantesCache;
 
     if (!lista.length) {
       alvo.innerHTML = `<p class="cupons-vazio">${
-        termo ? "Nenhum cupom encontrado para a busca." : "Nenhum cupom."
+        termo ? "Nenhum participante encontrado para a busca." : "Nenhum participante ainda."
       }</p>`;
       return;
     }
 
-    const podeBaixar = userRole !== "viewer";
     alvo.innerHTML =
-      `<table><thead><tr><th>Código</th><th>Tipo</th><th>Status</th>${
-        podeBaixar ? "<th>Ação</th>" : ""
-      }</tr></thead><tbody>` +
+      `<table><thead><tr><th>Nome</th><th>Telefone</th><th>CPF</th><th>Palpites</th><th>Pontos</th></tr></thead><tbody>` +
       lista
         .map(
-          (c) =>
+          (p) =>
             `<tr>` +
-            `<td class="cupom-codigo">${escapeHtml(c.codigo)}</td>` +
-            `<td class="cupom-tipo">${escapeHtml(c.tipo)}</td>` +
-            `<td><span class="cupom-status ${
-              c.utilizado ? "cupom-status--uso" : "cupom-status--disp"
-            }">${c.utilizado ? "Utilizado" : "Disponível"}</span></td>` +
-            (podeBaixar
-              ? `<td>${
-                  c.utilizado
-                    ? ""
-                    : `<button class="btn-baixa" data-usar="${c.id}">Dar baixa</button>`
-                }</td>`
-              : "") +
+            `<td>${escapeHtml(p.nome)}</td>` +
+            `<td>${escapeHtml(formatarTelefone(p.telefone))}</td>` +
+            `<td class="cupom-codigo">${escapeHtml(formatarCpf(p.cpf))}</td>` +
+            `<td>${escapeHtml(p.total_palpites)}</td>` +
+            `<td><strong>${escapeHtml(p.total_pontos)}</strong></td>` +
             `</tr>`
         )
         .join("") +
       `</tbody></table>`;
-
-    alvo.querySelectorAll("[data-usar]").forEach((b) =>
-      b.addEventListener("click", () => marcarCupom(b.dataset.usar))
-    );
-  }
-
-  async function marcarCupom(id) {
-    const res = await fetch(`/admin/cupons/${id}/utilizar`, {
-      method: "PUT",
-      headers: authHeaders(),
-    });
-    if (res.status === 401) return sair();
-    if (res.ok) {
-      carregarCupons();
-      carregarMetricas();
-    } else {
-      console.error("Erro ao dar baixa no cupom");
-    }
   }
 
   async function excluirJogo(id) {
@@ -661,13 +642,14 @@
     if (res.ok) carregarJogos();
   }
 
-  // SSE: mantém LEADS e métricas atualizados em tempo real (igual ao ranking).
+  // SSE: mantém Participantes e métricas atualizados em tempo real (igual ao ranking).
   function iniciarSSE() {
     if (typeof EventSource === "undefined" || eventSource) return;
     try {
       eventSource = new EventSource("/api/ranking/stream");
       eventSource.onmessage = () => {
         carregarMetricas();
+        carregarParticipantes();
       };
       eventSource.onerror = () => {}; // o EventSource reconecta sozinho
     } catch (e) {
@@ -701,22 +683,11 @@
     if (formLogin) formLogin.addEventListener("submit", login);
     const btnLogout = $("#btn-logout");
     if (btnLogout) btnLogout.addEventListener("click", sair);
-    const filtro = $("#filtro-cupons");
-    if (filtro) {
-      filtro.addEventListener("click", (ev) => {
-        const chip = ev.target.closest(".cupom-chip");
-        if (!chip) return;
-        filtro.querySelectorAll(".cupom-chip").forEach((c) => c.classList.remove("is-ativo"));
-        chip.classList.add("is-ativo");
-        filtroCupons = chip.dataset.filtro || "";
-        carregarCupons();
-      });
-    }
-    const buscaCp = $("#busca-cupons");
-    if (buscaCp) {
-      buscaCp.addEventListener("input", () => {
-        buscaCupons = buscaCp.value;
-        renderizarCupons();
+    const buscaPart = $("#busca-participantes");
+    if (buscaPart) {
+      buscaPart.addEventListener("input", () => {
+        buscaParticipantes = buscaPart.value;
+        renderizarParticipantes();
       });
     }
     const btnLanding = $("#btn-salvar-landing");
@@ -730,7 +701,7 @@
     const btnReloadLeads = $("#btn-recarregar-leads");
     if (btnReloadLeads)
       btnReloadLeads.addEventListener("click", () => {
-        carregarCupons();
+        carregarParticipantes();
         carregarMetricas();
       });
     document

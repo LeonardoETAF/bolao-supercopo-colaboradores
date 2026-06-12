@@ -1,14 +1,13 @@
 use crate::errors::AppError;
-use crate::models::{gerar_codigo, CriarPalpiteRequest, CupomInfo, Jogo, PalpiteResponse, Usuario};
+use crate::models::{CriarPalpiteRequest, Jogo, PalpiteResponse, Usuario};
 use crate::ratelimit;
 use crate::state::AppState;
-use crate::validacao::{somente_digitos, validar_email};
-use axum::extract::{ConnectInfo, Query, State};
+use crate::validacao::{somente_digitos, validar_cpf};
+use axum::extract::{ConnectInfo, State};
 use axum::Json;
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-/// POST /api/palpite — registra um palpite e gera o cupom de participação.
+/// POST /api/palpite — registra um palpite do colaborador.
 pub async fn enviar_palpite(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -41,8 +40,8 @@ pub async fn enviar_palpite(
         ));
     }
 
-    // 2. Validação de e-mail.
-    let email = validar_email(&req.email)?;
+    // 2. Validação de CPF.
+    let cpf = validar_cpf(&req.cpf)?;
 
     // 3. Verificar se há um jogo ativo correspondente.
     let jogo = sqlx::query_as::<_, Jogo>(
@@ -58,14 +57,14 @@ pub async fn enviar_palpite(
         return Err(AppError::JogoEncerrado);
     }
 
-    // 3c. E-mail e telefone só podem ser usados uma vez por jogo.
+    // 3c. CPF e telefone só podem ser usados uma vez por jogo.
     let ja_usado: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM palpites p
          JOIN usuarios u ON u.id = p.usuario_id
-         WHERE p.jogo_id = $1 AND (u.email = $2 OR u.telefone = $3)",
+         WHERE p.jogo_id = $1 AND (u.cpf = $2 OR u.telefone = $3)",
     )
     .bind(jogo.id)
-    .bind(&email)
+    .bind(&cpf)
     .bind(&telefone)
     .fetch_one(&state.db)
     .await?;
@@ -74,15 +73,15 @@ pub async fn enviar_palpite(
         return Err(AppError::PalpiteDuplicado);
     }
 
-    // 4. Buscar ou criar o usuário pelo e-mail (chave única).
+    // 4. Buscar ou criar o usuário pelo CPF (chave única).
     let usuario = sqlx::query_as::<_, Usuario>(
-        "INSERT INTO usuarios (nome, telefone, email) VALUES ($1, $2, $3)
-         ON CONFLICT (email) DO UPDATE SET nome = EXCLUDED.nome, telefone = EXCLUDED.telefone
+        "INSERT INTO usuarios (nome, telefone, cpf) VALUES ($1, $2, $3)
+         ON CONFLICT (cpf) DO UPDATE SET nome = EXCLUDED.nome, telefone = EXCLUDED.telefone
          RETURNING *",
     )
     .bind(&nome)
     .bind(&telefone)
-    .bind(&email)
+    .bind(&cpf)
     .fetch_one(&state.db)
     .await?;
 
@@ -98,20 +97,7 @@ pub async fn enviar_palpite(
     .execute(&state.db)
     .await?;
 
-    // 7. Gerar cupom de participação — desconto configurado no painel,
-    // código aleatório/único e vinculado a este jogo.
-    let cfg = crate::landing::carregar(&state.db).await?;
-    let desconto = format!("{}%", cfg.cupom_participacao_desconto);
-    let codigo = gerar_codigo();
-    sqlx::query("INSERT INTO cupons (usuario_id, jogo_id, tipo, codigo) VALUES ($1, $2, $3, $4)")
-        .bind(usuario.id)
-        .bind(jogo.id)
-        .bind(&desconto)
-        .bind(&codigo)
-        .execute(&state.db)
-        .await?;
-
-    // 8. Notificar o ranking ao vivo (SSE).
+    // 7. Notificar o ranking ao vivo (SSE).
     let _ = state.ranking_tx.send("atualizar".to_string());
 
     tracing::info!(usuario = %usuario.id, jogo = %jogo.id, "palpite registrado");
@@ -119,7 +105,6 @@ pub async fn enviar_palpite(
     Ok(Json(PalpiteResponse {
         sucesso: true,
         mensagem: "Palpite registrado com sucesso! 🎉".to_string(),
-        cupom: Some(CupomInfo { codigo, desconto }),
     }))
 }
 
@@ -138,37 +123,4 @@ pub async fn jogo_ativo(
     .await?;
 
     Ok(Json(jogo))
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MeusCuponsParams {
-    pub email: String,
-}
-
-#[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct CupomPublico {
-    pub tipo: String,
-    pub codigo: String,
-    pub utilizado: bool,
-}
-
-/// GET /api/meus-cupons?email=... — lista os cupons de um participante pelo e-mail.
-pub async fn meus_cupons(
-    State(state): State<AppState>,
-    Query(params): Query<MeusCuponsParams>,
-) -> Result<Json<Vec<CupomPublico>>, AppError> {
-    let email = validar_email(&params.email)?;
-
-    let cupons = sqlx::query_as::<_, CupomPublico>(
-        "SELECT c.tipo, c.codigo, c.utilizado
-         FROM cupons c
-         JOIN usuarios u ON u.id = c.usuario_id
-         WHERE u.email = $1
-         ORDER BY c.criado_em DESC",
-    )
-    .bind(&email)
-    .fetch_all(&state.db)
-    .await?;
-
-    Ok(Json(cupons))
 }

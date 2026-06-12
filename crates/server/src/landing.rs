@@ -39,11 +39,6 @@ pub struct LandingConfig {
     #[serde(default)]
     pub divulgar_resultado: bool,
 
-    // Cupons — apenas o percentual de desconto; o código é gerado
-    // aleatoriamente e único por cupom no momento da emissão.
-    pub cupom_participacao_desconto: i32,
-    pub cupom_acerto_desconto: i32,
-
     // Redes sociais
     pub instagram: RedeSocial,
     pub facebook: RedeSocial,
@@ -63,8 +58,6 @@ impl Default for LandingConfig {
             placar_time1: 0,
             placar_time2: 0,
             divulgar_resultado: false,
-            cupom_participacao_desconto: 10,
-            cupom_acerto_desconto: 30,
             instagram: RedeSocial::novo(true, "https://instagram.com/supercopo"),
             facebook: RedeSocial::novo(true, "https://facebook.com/supercopo"),
             tiktok: RedeSocial::novo(false, "https://tiktok.com/@supercopo"),

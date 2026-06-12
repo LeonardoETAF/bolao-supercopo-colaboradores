@@ -1,26 +1,26 @@
 # Bolão da Copa Super Copo — Rust Full-Stack
 
-Landing page interativa de bolão da Copa do Mundo: usuários fazem palpites de placar,
-acumulam pontos, sobem no ranking ao vivo e recebem cupons de desconto automaticamente.
+Bolão da Copa do Mundo para premiação dos colaboradores: eles fazem palpites de
+placar, acumulam pontos e sobem no ranking ao vivo. A premiação dos melhores é
+definida fora do sistema.
 
 **100% Rust.**
 
 | Camada    | Tecnologia                                            |
 | --------- | ----------------------------------------------------- |
-| Backend   | Axum 0.7 + Tokio + SQLx 0.7                            |
+| Backend   | Axum 0.7 + Tokio + SQLx 0.8                            |
 | Templates | Askama 0.12 (renderização server-side)                |
 | Frontend  | HTML + CSS puro (tema Copa) + JS vanilla (sem build)  |
 | Banco     | PostgreSQL (migrations via SQLx)                      |
 | Auth admin| JWT (`jsonwebtoken`)                                   |
 | Tempo real| SSE (Server-Sent Events) para ranking ao vivo         |
-| Cupons    | Códigos únicos (`rand`) — 10% por palpite, 30% no acerto exato |
 
 ## Estrutura
 
 ```
 .
 ├── Cargo.toml                 # workspace
-├── migrations/                # 001..004 (SQLx)
+├── migrations/                # 001..010 (SQLx)
 ├── crates/
 │   ├── server/                # app Axum (rotas, models, auth, SSE)
 │   └── frontend/              # structs + templates Askama
@@ -64,19 +64,21 @@ App em <http://localhost:3000> · Postgres exposto em `localhost:5433`.
 ## Fluxo de uso
 
 1. **Admin** (`/admin`) faz login, cadastra um jogo e o deixa **ativo**.
-2. **Usuários** (`/`) enviam o palpite (nome, telefone, CPF, placar) → ganham **cupom de 10%**.
-3. Admin informa o **resultado** do jogo → a pontuação de todos é recalculada e quem
-   acertou o placar exato ganha **cupom de 30%**.
-4. O **ranking** (`/ranking` e seção da home) atualiza ao vivo via SSE.
+2. **Colaboradores** (`/`) enviam o palpite (nome, telefone, CPF, placar).
+3. Admin informa o **resultado** do jogo → a pontuação de todos é recalculada.
+4. O **ranking** (`/ranking` e seção da home) atualiza ao vivo via SSE; a premiação
+   dos melhores colocados é definida fora do sistema.
 
 ## Regras de pontuação
 
-| Situação                         | Pontos | Cupom |
-| -------------------------------- | ------ | ----- |
-| Acerto exato do placar           | 10     | 30%   |
-| Acertou o vencedor (ou o empate) | 5      | —     |
-| Errou                            | 0      | —     |
-| Por participar (qualquer palpite)| —      | 10%   |
+| Situação                                          | Pontos |
+| ------------------------------------------------- | ------ |
+| Acerto exato do placar (inclui empate exato)      | 10     |
+| Acertou apenas o vencedor (jogo não empatado)     | 5      |
+| Errou o resultado                                 | 0      |
+
+> Empate só pontua se o **placar exato** for cravado (10). Empate fora do placar
+> exato vale 0 — não há "vencedor" a ser acertado.
 
 ## Endpoints
 
@@ -85,37 +87,43 @@ App em <http://localhost:3000> · Postgres exposto em `localhost:5433`.
 | ------ | ---------------------- | ------------------------------------------ |
 | GET    | `/`                    | Landing + formulário de palpite            |
 | GET    | `/ranking`             | Página de ranking completo                 |
-| POST   | `/api/palpite`         | Registra palpite e gera cupom de 10%       |
+| POST   | `/api/palpite`         | Registra um palpite                        |
 | GET    | `/api/jogo-ativo`      | Jogo atualmente aberto para palpites (JSON)|
-| GET    | `/api/meus-cupons?cpf=`| Lista os cupons de um participante pelo CPF |
-| GET    | `/api/ranking?page=N`  | Ranking paginado (100/página)              |
+| GET    | `/api/ranking?page=N`  | Ranking paginado (20/página)               |
 | GET    | `/api/ranking/stream`  | SSE — avisa quando o ranking muda          |
 
 > `POST /api/palpite` aplica **rate-limit por IP** (máx. 5/min) e recusa palpites
 > após o horário de início do jogo (`400`).
 
 ### Admin (exigem `Authorization: Bearer <jwt>`)
+O login aceita dois papéis: **admin** (acesso total) e **viewer** (somente
+leitura de Métricas e Participantes). As rotas de escrita exigem o papel admin.
+
 | Método | Rota                            | Descrição                          |
 | ------ | ------------------------------- | ---------------------------------- |
-| POST   | `/admin/login`                  | Autentica e devolve o JWT (24h)    |
+| POST   | `/admin/login`                  | Autentica e devolve o JWT (24h) + papel |
 | POST   | `/admin/jogos`                  | Cadastra jogo                      |
 | GET    | `/admin/jogos`                  | Lista jogos                        |
 | PUT    | `/admin/jogos/:id`              | Edita jogo (times e data)          |
 | DELETE | `/admin/jogos/:id`              | Exclui jogo (e palpites em cascata)|
-| PUT    | `/admin/jogos/:id/ativar`       | Define o jogo como ativo           |
+| PUT    | `/admin/jogos/:id/ativar`       | Abre o jogo para palpites          |
+| PUT    | `/admin/jogos/:id/desativar`    | Tira o jogo do ar (não aceita mais palpites) |
 | PUT    | `/admin/jogos/:id/resultado`    | Informa placar e pontua os palpites|
-| GET    | `/admin/metricas`               | Métricas gerais                    |
-| GET    | `/admin/cupons?filtro=...`      | Lista cupons (todos/disponíveis/utilizados) |
-| PUT    | `/admin/cupons/:id/utilizar`    | Dá baixa no cupom (marca utilizado)|
-| PUT    | `/admin/bolao/encerrar`         | Encerra o bolão (congela ranking, mostra pódio na home) |
-| PUT    | `/admin/bolao/reabrir`          | Reabre o bolão para novos palpites |
+| GET    | `/admin/bandeiras`              | Lista as bandeiras disponíveis (`static/img`) |
+| GET    | `/admin/metricas`               | Métricas gerais (admin e viewer)   |
+| GET    | `/admin/participantes`          | Lista participantes com pontos (admin e viewer) |
+| GET    | `/admin/landing`                | Configuração atual da landing      |
+| PUT    | `/admin/landing`                | Salva a landing e define o jogo atual |
 
 > **Vários jogos abertos:** quando há mais de um jogo ativo, a home mostra 1 em
 > destaque (com o formulário completo) e os demais em cards de "Outros jogos
 > abertos" — o usuário preenche os dados uma vez e palpita em quantos quiser.
 >
-> **Encerramento:** com o bolão encerrado, a home exibe o **pódio (top 3)** e
-> `POST /api/palpite` passa a recusar palpites (`400`).
+> **Encerramento automático:** o bolão é considerado **encerrado** quando não há
+> mais nenhum jogo ativo com horário no futuro (todos os jogos abertos já
+> começaram ou foram encerrados). Nesse estado a home exibe o **pódio (top 3)** e
+> `POST /api/palpite` passa a recusar palpites (`400`). Cadastrar/ativar um novo
+> jogo futuro reabre o bolão automaticamente — não há rota manual de encerrar/reabrir.
 
 ## Variáveis de ambiente
 

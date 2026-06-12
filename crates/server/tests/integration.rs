@@ -83,12 +83,12 @@ async fn fluxo_completo() {
     };
     let app = server::montar_app(state.clone());
 
-    // E-mail de teste improvável de colidir com dados reais.
-    const EMAIL: &str = "teste_integracao@email.com";
+    // CPF de teste válido (dígitos verificadores corretos).
+    const CPF: &str = "11144477735";
 
     // Limpa qualquer resíduo de execuções anteriores.
-    let _ = sqlx::query("DELETE FROM usuarios WHERE email = $1")
-        .bind(EMAIL)
+    let _ = sqlx::query("DELETE FROM usuarios WHERE cpf = $1")
+        .bind(CPF)
         .execute(&state.db)
         .await;
 
@@ -136,7 +136,7 @@ async fn fluxo_completo() {
     assert_eq!(st, StatusCode::OK);
     let jogo_id = jv["id"].as_str().unwrap().to_string();
 
-    // 3. E-mail inválido -> 400.
+    // 3. CPF inválido -> 400.
     let (st, _) = req(
         &app,
         "POST",
@@ -144,46 +144,38 @@ async fn fluxo_completo() {
         None,
         Some(json!({
             "nome": "Teste Int", "telefone": "11999990000",
-            "email": "sem-arroba", "jogo_id": jogo_id,
+            "cpf": "12345678900", "jogo_id": jogo_id,
             "gols_time_a": 1, "gols_time_b": 0
         })),
     )
     .await;
     assert_eq!(st, StatusCode::BAD_REQUEST);
 
-    // 4. Palpite válido -> 200 + cupom de participação (percentual configurável).
+    // 4. Palpite válido -> 200 (sem cupom).
     let palpite = json!({
         "nome": "Teste Int", "telefone": "11999990000",
-        "email": EMAIL, "jogo_id": jogo_id,
+        "cpf": CPF, "jogo_id": jogo_id,
         "gols_time_a": 2, "gols_time_b": 1
     });
     let (st, pv) = req(&app, "POST", "/api/palpite", None, Some(palpite.clone())).await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(pv["sucesso"], json!(true));
-    let desconto_participacao = pv["cupom"]["desconto"].as_str().unwrap().to_string();
-    assert!(desconto_participacao.ends_with('%'), "desconto deve ser um percentual");
+    assert!(pv.get("cupom").is_none(), "a resposta não deve conter cupom");
 
     // 5. Palpite duplicado -> 409.
     let (st, _) = req(&app, "POST", "/api/palpite", None, Some(palpite)).await;
     assert_eq!(st, StatusCode::CONFLICT);
 
-    // 6. Meus cupons por e-mail -> contém o cupom de participação gerado.
-    let (st, cv) = req(
-        &app,
-        "GET",
-        &format!("/api/meus-cupons?email={EMAIL}"),
-        None,
-        None,
-    )
-    .await;
+    // 6. Participante aparece na lista do admin.
+    let (st, parts) = req(&app, "GET", "/admin/participantes", Some(&token), None).await;
     assert_eq!(st, StatusCode::OK);
-    assert!(cv
+    assert!(parts
         .as_array()
         .unwrap()
         .iter()
-        .any(|c| c["tipo"] == json!(desconto_participacao)));
+        .any(|p| p["cpf"] == json!(CPF)));
 
-    // 7. Informar resultado exato -> pontua e gera cupom de 30%.
+    // 7. Informar resultado exato -> apura os palpites (10 pts para o acerto).
     let (st, rv) = req(
         &app,
         "PUT",
@@ -193,15 +185,15 @@ async fn fluxo_completo() {
     )
     .await;
     assert_eq!(st, StatusCode::OK);
-    assert_eq!(rv["cupons_30"], json!(1));
+    assert_eq!(rv["processados"], json!(1));
 
     // Limpeza: remove o jogo (cascata em palpites) e o usuário de teste.
     let _ = sqlx::query("DELETE FROM jogos WHERE id = $1::uuid")
         .bind(&jogo_id)
         .execute(&state.db)
         .await;
-    let _ = sqlx::query("DELETE FROM usuarios WHERE email = $1")
-        .bind(EMAIL)
+    let _ = sqlx::query("DELETE FROM usuarios WHERE cpf = $1")
+        .bind(CPF)
         .execute(&state.db)
         .await;
 }

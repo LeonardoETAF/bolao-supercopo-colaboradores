@@ -20,7 +20,7 @@
   function linha(p, i) {
     var pos = p.posicao != null ? p.posicao : i + 1;
     var classe = pos >= 1 && pos <= 3 ? ' rk-row--' + pos : '';
-    var sub = p.ultimo_palpite ? 'palpite ' + escapar(p.ultimo_palpite) : '&nbsp;';
+    var sub = p.ultimo_palpite ? 'Palpite ' + escapar(p.ultimo_palpite) : '&nbsp;';
     var pts = p.total_pontos != null ? p.total_pontos : 0;
 
     return (

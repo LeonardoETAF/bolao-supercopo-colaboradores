@@ -32,7 +32,6 @@ pub fn montar_app(state: AppState) -> Router {
         // API pública
         .route("/api/palpite", post(routes::palpites::enviar_palpite))
         .route("/api/jogo-ativo", get(routes::palpites::jogo_ativo))
-        .route("/api/meus-cupons", get(routes::palpites::meus_cupons))
         .route("/api/ranking", get(routes::ranking::ranking_completo))
         .route("/api/ranking/stream", get(routes::sse::ranking_stream))
         // Admin (protegido por JWT, exceto o login)
@@ -53,8 +52,7 @@ pub fn montar_app(state: AppState) -> Router {
             put(routes::admin::informar_resultado),
         )
         .route("/admin/metricas", get(routes::admin::metricas))
-        .route("/admin/cupons", get(routes::admin::listar_cupons))
-        .route("/admin/cupons/:id/utilizar", put(routes::admin::marcar_cupom))
+        .route("/admin/participantes", get(routes::admin::listar_participantes))
         .route(
             "/admin/landing",
             get(routes::admin::obter_landing).put(routes::admin::salvar_landing),

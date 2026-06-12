@@ -38,9 +38,6 @@ pub struct IndexTemplate {
     pub redes: Vec<RedeView>,
     /// Link do WhatsApp configurado (modal de sucesso), quando ativo.
     pub whatsapp_url: Option<String>,
-    /// Percentuais de desconto configurados no painel (cupons).
-    pub desconto_participacao: i32,
-    pub desconto_acerto: i32,
 }
 
 #[derive(Template)]

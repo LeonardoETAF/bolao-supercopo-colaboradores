@@ -1,4 +1,3 @@
-use super::cupom::CupomInfo;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
@@ -18,5 +17,4 @@ pub struct Palpite {
 pub struct PalpiteResponse {
     pub sucesso: bool,
     pub mensagem: String,
-    pub cupom: Option<CupomInfo>,
 }

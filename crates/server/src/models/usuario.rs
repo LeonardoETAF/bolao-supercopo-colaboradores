@@ -7,7 +7,7 @@ pub struct Usuario {
     pub id: Uuid,
     pub nome: String,
     pub telefone: String,
-    pub email: String,
+    pub cpf: String,
     pub data_cadastro: DateTime<Utc>,
 }
 
@@ -16,7 +16,7 @@ pub struct Usuario {
 pub struct CriarPalpiteRequest {
     pub nome: String,
     pub telefone: String,
-    pub email: String,
+    pub cpf: String,
     pub jogo_id: Uuid,
     pub gols_time_a: i16,
     pub gols_time_b: i16,

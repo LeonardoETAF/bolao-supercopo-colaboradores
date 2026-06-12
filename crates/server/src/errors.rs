@@ -24,8 +24,8 @@ pub enum AppError {
     #[error("Você já enviou um palpite para este jogo")]
     PalpiteDuplicado,
 
-    #[error("E-mail inválido")]
-    EmailInvalido,
+    #[error("CPF inválido")]
+    CpfInvalido,
 
     #[error("Credenciais inválidas")]
     NaoAutorizado,
@@ -44,7 +44,7 @@ impl AppError {
     fn status(&self) -> StatusCode {
         match self {
             AppError::Validacao(_)
-            | AppError::EmailInvalido
+            | AppError::CpfInvalido
             | AppError::JogoNaoAtivo
             | AppError::JogoEncerrado
             | AppError::BolaoEncerrado => StatusCode::BAD_REQUEST,

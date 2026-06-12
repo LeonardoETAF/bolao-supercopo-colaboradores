@@ -43,7 +43,8 @@ pub struct RankingResponse {
 
 /// GET /api/ranking?page=N&q=texto — ranking paginado (20 por página) com busca por nome.
 /// A posição é sempre a do ranking global (não muda ao filtrar pela busca).
-/// Critério de desempate: pontos, acertos exatos, nº de palpites, quem palpitou antes.
+/// Ordenação: maior pontuação primeiro; em caso de empate, quem palpitou
+/// por último (palpite mais recente) fica à frente.
 pub async fn ranking_completo(
     State(state): State<AppState>,
     Query(params): Query<RankingParams>,
@@ -58,7 +59,7 @@ pub async fn ranking_completo(
          WHERE ($1 = ''
                 OR u.nome ILIKE '%' || $1 || '%'
                 OR u.telefone ILIKE '%' || $1 || '%'
-                OR u.email ILIKE '%' || $1 || '%')",
+                OR u.cpf ILIKE '%' || $1 || '%')",
     )
     .bind(&busca)
     .fetch_one(&state.db)
@@ -70,7 +71,7 @@ pub async fn ranking_completo(
             SELECT
                 u.nome,
                 u.telefone,
-                u.email,
+                u.cpf,
                 COALESCE(SUM(p.pontuacao), 0)::BIGINT                   AS total_pontos,
                 COUNT(p.id)::BIGINT                                     AS total_palpites,
                 COUNT(*) FILTER (WHERE p.pontuacao = 10)::BIGINT        AS acertos_exatos,
@@ -80,20 +81,18 @@ pub async fn ranking_completo(
                 ROW_NUMBER() OVER (
                     ORDER BY
                         COALESCE(SUM(p.pontuacao), 0) DESC,
-                        COUNT(*) FILTER (WHERE p.pontuacao = 10) DESC,
-                        COUNT(p.id) DESC,
-                        MIN(p.criado_em) ASC NULLS LAST
+                        MAX(p.criado_em) DESC NULLS LAST
                 )::BIGINT                                               AS posicao
             FROM usuarios u
             LEFT JOIN palpites p ON p.usuario_id = u.id
-            GROUP BY u.id, u.nome, u.telefone, u.email
+            GROUP BY u.id, u.nome, u.telefone, u.cpf
         )
         SELECT nome, total_pontos, total_palpites, acertos_exatos, ultimo_palpite, posicao
         FROM classificados
         WHERE ($1 = ''
                OR nome ILIKE '%' || $1 || '%'
                OR telefone ILIKE '%' || $1 || '%'
-               OR email ILIKE '%' || $1 || '%')
+               OR cpf ILIKE '%' || $1 || '%')
         ORDER BY posicao
         LIMIT $2 OFFSET $3
         "#,

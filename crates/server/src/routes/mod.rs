@@ -6,13 +6,18 @@ pub mod sse;
 
 /// Pontuação de um palpite frente ao resultado real.
 /// - Acerto exato (placar idêntico): 10 pontos
-/// - Acerto do vencedor OU do empate: 5 pontos
+/// - Acerto apenas do vencedor (quando o jogo NÃO terminou empatado): 5 pontos
 /// - Errou: 0 pontos
+///
+/// Empate só pontua quando o placar exato é cravado (10). Um palpite de empate
+/// que não acerta o placar — ou um empate real que o palpite não cravou — vale 0,
+/// pois empate não tem "vencedor" a ser acertado.
 pub fn calcular_pontos(p_a: i16, p_b: i16, r_a: i16, r_b: i16) -> i16 {
     if p_a == r_a && p_b == r_b {
         return 10;
     }
-    if vencedor(p_a, p_b) == vencedor(r_a, r_b) {
+    // 5 pontos só quando há um vencedor real e o palpite acertou esse vencedor.
+    if r_a != r_b && vencedor(p_a, p_b) == vencedor(r_a, r_b) {
         return 5;
     }
     0
@@ -42,8 +47,26 @@ mod tests {
     }
 
     #[test]
-    fn acerto_do_empate_vale_5() {
-        assert_eq!(calcular_pontos(1, 1, 2, 2), 5);
+    fn empate_exato_vale_10() {
+        assert_eq!(calcular_pontos(2, 2, 2, 2), 10);
+    }
+
+    #[test]
+    fn empate_sem_cravar_placar_vale_0() {
+        // Palpitou empate, deu empate, mas placar diferente: não pontua.
+        assert_eq!(calcular_pontos(1, 1, 2, 2), 0);
+    }
+
+    #[test]
+    fn palpite_de_empate_em_jogo_com_vencedor_vale_0() {
+        // Palpitou empate, mas o jogo teve vencedor: não pontua.
+        assert_eq!(calcular_pontos(1, 1, 2, 1), 0);
+    }
+
+    #[test]
+    fn vencedor_certo_quando_resultado_foi_empate_vale_0() {
+        // Palpitou vitória, mas o jogo terminou empatado: não pontua.
+        assert_eq!(calcular_pontos(2, 1, 1, 1), 0);
     }
 
     #[test]
