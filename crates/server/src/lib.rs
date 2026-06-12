@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod bolao;
+pub mod colaboradores;
 pub mod config;
 pub mod db;
 pub mod landing;

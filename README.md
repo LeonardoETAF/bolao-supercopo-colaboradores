@@ -20,7 +20,7 @@ definida fora do sistema.
 ```
 .
 ├── Cargo.toml                 # workspace
-├── migrations/                # 001..010 (SQLx)
+├── migrations/                # 001..011 (SQLx)
 ├── crates/
 │   ├── server/                # app Axum (rotas, models, auth, SSE)
 │   └── frontend/              # structs + templates Askama
@@ -64,10 +64,23 @@ App em <http://localhost:3000> · Postgres exposto em `localhost:5433`.
 ## Fluxo de uso
 
 1. **Admin** (`/admin`) faz login, cadastra um jogo e o deixa **ativo**.
-2. **Colaboradores** (`/`) enviam o palpite (nome, telefone, CPF, placar).
+2. **Colaboradores** (`/`) enviam o palpite (nome, telefone, CPF, placar). Só são
+   aceitos CPFs que constam na **lista interna de colaboradores** (whitelist) —
+   ver _Colaboradores autorizados_ abaixo.
 3. Admin informa o **resultado** do jogo → a pontuação de todos é recalculada.
 4. O **ranking** (`/ranking` e seção da home) atualiza ao vivo via SSE; a premiação
    dos melhores colocados é definida fora do sistema.
+
+## Colaboradores autorizados (whitelist)
+
+Apenas colaboradores previamente cadastrados podem palpitar. A lista (nome + CPF)
+fica na tabela `colaboradores`, populada pela migration `011_create_colaboradores.sql`.
+No envio do palpite, o CPF (11 dígitos) precisa constar nessa tabela; caso contrário
+a API responde **403** (`CPF não encontrado na lista de colaboradores`).
+
+> A validação é por **presença na lista** (não pelo dígito verificador), pois a
+> lista interna é a fonte da verdade. Para incluir/remover colaboradores, edite a
+> tabela `colaboradores` (ex.: `INSERT INTO colaboradores (cpf, nome) VALUES ('<11 dígitos>', '<NOME>')`).
 
 ## Regras de pontuação
 
@@ -92,8 +105,8 @@ App em <http://localhost:3000> · Postgres exposto em `localhost:5433`.
 | GET    | `/api/ranking?page=N`  | Ranking paginado (20/página)               |
 | GET    | `/api/ranking/stream`  | SSE — avisa quando o ranking muda          |
 
-> `POST /api/palpite` aplica **rate-limit por IP** (máx. 5/min) e recusa palpites
-> após o horário de início do jogo (`400`).
+> `POST /api/palpite` aplica **rate-limit por IP** (máx. 5/min), recusa palpites
+> após o horário de início do jogo (`400`) e CPFs fora da lista de colaboradores (`403`).
 
 ### Admin (exigem `Authorization: Bearer <jwt>`)
 O login aceita dois papéis: **admin** (acesso total) e **viewer** (somente

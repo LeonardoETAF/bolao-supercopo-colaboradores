@@ -92,6 +92,15 @@ async fn fluxo_completo() {
         .execute(&state.db)
         .await;
 
+    // Autoriza o CPF de teste na whitelist de colaboradores.
+    let _ = sqlx::query(
+        "INSERT INTO colaboradores (cpf, nome) VALUES ($1, 'Teste Integracao')
+         ON CONFLICT (cpf) DO NOTHING",
+    )
+    .bind(CPF)
+    .execute(&state.db)
+    .await;
+
     // 1. Login admin.
     let (st, v) = req(
         &app,
@@ -136,7 +145,7 @@ async fn fluxo_completo() {
     assert_eq!(st, StatusCode::OK);
     let jogo_id = jv["id"].as_str().unwrap().to_string();
 
-    // 3. CPF inválido -> 400.
+    // 3. CPF fora da lista de colaboradores -> 403.
     let (st, _) = req(
         &app,
         "POST",
@@ -149,7 +158,7 @@ async fn fluxo_completo() {
         })),
     )
     .await;
-    assert_eq!(st, StatusCode::BAD_REQUEST);
+    assert_eq!(st, StatusCode::FORBIDDEN);
 
     // 4. Palpite válido -> 200 (sem cupom).
     let palpite = json!({
@@ -193,6 +202,10 @@ async fn fluxo_completo() {
         .execute(&state.db)
         .await;
     let _ = sqlx::query("DELETE FROM usuarios WHERE cpf = $1")
+        .bind(CPF)
+        .execute(&state.db)
+        .await;
+    let _ = sqlx::query("DELETE FROM colaboradores WHERE cpf = $1")
         .bind(CPF)
         .execute(&state.db)
         .await;

@@ -60,57 +60,6 @@
   }
 
   /* ----------------------------------------------------------------
-   * Validação de CPF (dígitos verificadores)
-   * ---------------------------------------------------------------- */
-
-  /**
-   * Valida um CPF (string só com dígitos esperada, mas tolera máscara).
-   * Rejeita sequências repetidas (ex.: 11111111111).
-   */
-  function cpfValido(valor) {
-    var cpf = somenteDigitos(valor);
-
-    if (cpf.length !== 11) {
-      return false;
-    }
-
-    // Rejeita todos os dígitos iguais.
-    if (/^(\d)\1{10}$/.test(cpf)) {
-      return false;
-    }
-
-    var i, soma, resto;
-
-    // Primeiro dígito verificador.
-    soma = 0;
-    for (i = 0; i < 9; i++) {
-      soma += parseInt(cpf.charAt(i), 10) * (10 - i);
-    }
-    resto = (soma * 10) % 11;
-    if (resto === 10 || resto === 11) {
-      resto = 0;
-    }
-    if (resto !== parseInt(cpf.charAt(9), 10)) {
-      return false;
-    }
-
-    // Segundo dígito verificador.
-    soma = 0;
-    for (i = 0; i < 10; i++) {
-      soma += parseInt(cpf.charAt(i), 10) * (11 - i);
-    }
-    resto = (soma * 10) % 11;
-    if (resto === 10 || resto === 11) {
-      resto = 0;
-    }
-    if (resto !== parseInt(cpf.charAt(10), 10)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  /* ----------------------------------------------------------------
    * Helpers de erro
    * ---------------------------------------------------------------- */
 
@@ -163,7 +112,7 @@
     if (inputCpf) {
       inputCpf.addEventListener('input', function () {
         inputCpf.value = formatarCpf(inputCpf.value);
-        if (cpfValido(inputCpf.value)) {
+        if (somenteDigitos(inputCpf.value).length === 11) {
           definirErro('erro-cpf', '');
         }
       });
@@ -207,10 +156,11 @@
         ok = false;
       }
 
-      // CPF: dígitos verificadores válidos.
-      var cpfVal = inputCpf ? inputCpf.value : '';
-      if (!cpfValido(cpfVal)) {
-        definirErro('erro-cpf', 'CPF inválido.');
+      // CPF: precisa ter 11 dígitos (a autorização real é feita no servidor,
+      // contra a lista de colaboradores).
+      var cpfDigitos = inputCpf ? somenteDigitos(inputCpf.value) : '';
+      if (cpfDigitos.length !== 11) {
+        definirErro('erro-cpf', 'Informe um CPF com 11 dígitos.');
         ok = false;
       }
 

@@ -2,7 +2,7 @@ use crate::errors::AppError;
 use crate::models::{CriarPalpiteRequest, Jogo, PalpiteResponse, Usuario};
 use crate::ratelimit;
 use crate::state::AppState;
-use crate::validacao::{somente_digitos, validar_cpf};
+use crate::validacao::somente_digitos;
 use axum::extract::{ConnectInfo, State};
 use axum::Json;
 use std::net::SocketAddr;
@@ -40,8 +40,18 @@ pub async fn enviar_palpite(
         ));
     }
 
-    // 2. Validação de CPF.
-    let cpf = validar_cpf(&req.cpf)?;
+    // 2. CPF: precisa ter 11 dígitos e constar na lista interna de colaboradores
+    // (whitelist). CPF fora da lista não pode palpitar.
+    let cpf = somente_digitos(&req.cpf);
+    if cpf.len() != 11 {
+        return Err(AppError::CpfInvalido);
+    }
+    if crate::colaboradores::buscar_nome(&state.db, &cpf)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::CpfNaoAutorizado);
+    }
 
     // 3. Verificar se há um jogo ativo correspondente.
     let jogo = sqlx::query_as::<_, Jogo>(

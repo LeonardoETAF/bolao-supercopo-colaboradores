@@ -27,6 +27,9 @@ pub enum AppError {
     #[error("CPF inválido")]
     CpfInvalido,
 
+    #[error("CPF não encontrado na lista de colaboradores. Procure o RH.")]
+    CpfNaoAutorizado,
+
     #[error("Credenciais inválidas")]
     NaoAutorizado,
 
@@ -50,6 +53,7 @@ impl AppError {
             | AppError::BolaoEncerrado => StatusCode::BAD_REQUEST,
             AppError::MuitasRequisicoes => StatusCode::TOO_MANY_REQUESTS,
             AppError::PalpiteDuplicado => StatusCode::CONFLICT,
+            AppError::CpfNaoAutorizado => StatusCode::FORBIDDEN,
             AppError::NaoAutorizado => StatusCode::UNAUTHORIZED,
             AppError::NaoEncontrado => StatusCode::NOT_FOUND,
             AppError::Db(_) | AppError::Interno(_) => StatusCode::INTERNAL_SERVER_ERROR,

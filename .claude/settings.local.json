@@ -231,7 +231,22 @@
       "Bash(pip install *)",
       "Bash(curl -s -o /dev/null -w 'GET /admin -> %{http_code}\\\\n' --max-time 4 http://localhost:3000/admin)",
       "Bash(command -v lsof)",
-      "Bash(xargs -r kill -9)"
+      "Bash(xargs -r kill -9)",
+      "Bash(psql \"postgres://copa:copa_secret@localhost:5432/copa\" -c \"\\\\d usuarios\")",
+      "Bash(curl -s -o /dev/null -w \"admin -> HTTP %{http_code}\\\\n\" -X POST http://localhost:3000/admin/login -H 'Content-Type: application/json' -d '{\"usuario\":\"admin\",\"senha\":\"supercopo2026\"}')",
+      "Bash(curl -s -o /dev/null -w \"viewer -> HTTP %{http_code}\\\\n\" -X POST http://localhost:3000/admin/login -H 'Content-Type: application/json' -d '{\"usuario\":\"leads\",\"senha\":\"leads2026\"}')",
+      "Bash(psql \"postgres://copa:copa_secret@localhost:5432/copa\" -c \"\\\\dt\")",
+      "Bash(psql postgres://copa:copa_secret@localhost:5432/copa -t -c ' *)",
+      "Bash(PGPASSWORD=copa_secret psql -h localhost -U copa -d copa -tc \"SELECT column_name FROM information_schema.columns WHERE table_name='usuarios' ORDER BY ordinal_position;\")",
+      "Bash(cargo report *)",
+      "Bash(cargo update *)",
+      "Bash(PGPASSWORD=copa_secret psql -h localhost -U copa -d copa -c \"SELECT version, description, success FROM _sqlx_migrations ORDER BY version;\")",
+      "Bash(PGPASSWORD=copa_secret psql -h localhost -U copa -d copa -tc \"SELECT version, description FROM _sqlx_migrations WHERE version=10; SELECT to_regclass\\('public.cupons'\\) IS NULL AS cupons_removida;\")",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(PGPASSWORD=copa_secret psql -h localhost -U copa -d copa -tc \"SELECT count\\(*\\) AS total_colaboradores FROM colaboradores; SELECT cpf, nome FROM colaboradores WHERE nome IN \\('ALEXANDRE SOARES','NATALY CAMILY HUBARYK','VITOR HUGO KISTENMACHER','HELLOA MENDONCA DE CARVALHO'\\);\")",
+      "Bash(DATABASE_URL=postgres://copa:copa_secret@localhost:5432/copa cargo test -p server --test integration)",
+      "Bash(PGPASSWORD=copa_secret psql -h localhost -U copa -d copa -tc \"SELECT count\\(*\\) FROM colaboradores; SELECT cpf,nome FROM colaboradores WHERE nome IN \\('ALEXANDRE SOARES','NATALY CAMILY HUBARYK','VITOR HUGO KISTENMACHER','HELLOA MENDONCA DE CARVALHO'\\) ORDER BY nome;\")"
     ],
     "additionalDirectories": [
       "/tmp"
