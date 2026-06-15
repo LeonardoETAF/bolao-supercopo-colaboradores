@@ -38,6 +38,8 @@ pub struct IndexTemplate {
     pub redes: Vec<RedeView>,
     /// Link do WhatsApp configurado (modal de sucesso), quando ativo.
     pub whatsapp_url: Option<String>,
+    /// URL absoluta da imagem de preview (Open Graph) p/ WhatsApp e redes.
+    pub og_image: String,
 }
 
 #[derive(Template)]

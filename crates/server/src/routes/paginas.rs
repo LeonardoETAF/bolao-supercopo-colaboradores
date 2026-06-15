@@ -93,9 +93,32 @@ async fn redes_e_whatsapp(state: &AppState) -> (Vec<RedeView>, Option<String>) {
     (redes, whatsapp_url)
 }
 
+/// Monta a URL absoluta da imagem de preview (Open Graph) a partir dos headers
+/// da requisição. O WhatsApp/redes exigem URL absoluta para exibir o preview.
+fn og_image_url(headers: &axum::http::HeaderMap) -> String {
+    let host = headers
+        .get(axum::http::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:3000");
+    let proto = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or(if host.starts_with("localhost") || host.starts_with("127.") {
+            "http"
+        } else {
+            "https"
+        });
+    format!("{proto}://{host}/static/img/og-preview.jpg")
+}
+
 /// GET / — landing page. Se o bolão estiver encerrado, mostra o pódio;
 /// caso contrário, mostra os jogos abertos (1 destaque + lista).
-pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppError> {
+pub async fn index(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Html<String>, AppError> {
+    let og_image = og_image_url(&headers);
+
     // Bolão encerrado: exibe o pódio (top 3 com pontuação > 0).
     if bolao::esta_encerrado(&state.db).await? {
         let linhas = sqlx::query_as::<_, PodioRow>(
@@ -131,6 +154,7 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
             outros: Vec::new(),
             redes,
             whatsapp_url,
+            og_image,
         });
     }
 
@@ -158,6 +182,7 @@ pub async fn index(State(state): State<AppState>) -> Result<Html<String>, AppErr
         outros: views,
         redes,
         whatsapp_url,
+        og_image,
     })
 }
 
