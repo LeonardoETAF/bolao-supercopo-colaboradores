@@ -145,6 +145,10 @@
       case "escocia":
       case "scotland":
         return "/static/img/Flag_of_Scotland.svg";
+      case "japão":
+      case "japao":
+      case "japan":
+        return "/static/img/Flag_of_Japan.svg";
       default:
         return null;
     }
