@@ -149,6 +149,9 @@
       case "japao":
       case "japan":
         return "/static/img/Flag_of_Japan.svg";
+      case "noruega":
+      case "norway":
+        return "/static/img/Flag_of_Norway.svg";
       default:
         return null;
     }
